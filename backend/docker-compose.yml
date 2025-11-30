@@ -4,11 +4,7 @@ services:
   api:
     build: .
     container_name: chainlogic-api
-<<<<<<< HEAD
    
-=======
-    
->>>>>>> 196199d93c0092ff76b4f8f195781e5665b075ff
     volumes:
       - ./data:/app/data
     restart: unless-stopped
