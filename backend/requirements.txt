@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+python-binance
+pandas
+numpy
+matplotlib
+apscheduler
+python-dotenv
+openai
+requests
+python-dateutil
