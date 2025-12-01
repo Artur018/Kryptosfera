@@ -10,13 +10,14 @@ W tym module łączę kilka kroków w jednym miejscu:
 Wszystkie katalogi tworzę zawczasu, by wyeliminować błędy IO i pozwolić
 na uruchomienia w świeżym środowisku CI/CD bez dodatkowych kroków.
 """
-
+import os
 import pandas as pd
 import numpy as np
+import glob
 from datetime import datetime, timedelta
 from binance.client import Client
 from dotenv import load_dotenv
-import os
+
 
 os.makedirs("data/reports", exist_ok=True)
 os.makedirs("data/charts", exist_ok=True)
@@ -113,44 +114,66 @@ def save_report_csv(df):
 # Scalanie raportów
 # ============================================================
 def merge_all_reports():
-    folder_path = os.path.join("data", "reports")
-    merged_file = os.path.join("data", "all_reports.csv")
+    """
+    Merge all CSV reports from data/reports into a single all_reports.csv file.
 
-    if not os.path.exists(folder_path):
-        print("⚠️ Folder 'data/reports' nie istnieje — brak plików do połączenia.")
-        return
+    - Normalizes column names (Symbol -> symbol).
+    - Ensures a 'report_date' column exists (based on filename if missing).
+    - Drops duplicates based on available keys.
+    - Sorts in a reasonable order for analysis.
+    """
+    reports_dir = "data/reports"
+    pattern = os.path.join(reports_dir, "report_*.csv")
+    files = glob.glob(pattern)
 
-    files = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.endswith(".csv")]
     if not files:
         print("⚠️ Brak plików raportów do połączenia.")
         return
 
-    df_list = []
-    for file in files:
-        try:
-            df = pd.read_csv(file)
-            df_list.append(df)
-        except Exception as e:
-            print(f"❌ Błąd wczytywania {file}: {e}")
+    frames = []
 
-    if not df_list:
-        print("⚠️ Nie udało się połączyć raportów (puste pliki?).")
+    for path in files:
+        try:
+            df = pd.read_csv(path)
+
+            # Normalizacja nazwy kolumny z symbolem
+            if "symbol" not in df.columns and "Symbol" in df.columns:
+                df["symbol"] = df["Symbol"]
+
+            # Ustal report_date – jeśli nie ma, użyj stempla z nazwy pliku
+            if "report_date" not in df.columns:
+                # np. report_2025-12-01-20-08-00.csv -> 2025-12-01-20-08-00
+                base = os.path.basename(path)
+                ts = base.replace("report_", "").replace(".csv", "")
+                df["report_date"] = ts
+
+            frames.append(df)
+
+        except Exception as e:
+            print(f"⚠️ Problem z plikiem {path}: {e}")
+
+    if not frames:
+        print("⚠️ Nie udało się wczytać żadnego raportu.")
         return
 
-    merged_df = pd.concat(df_list, ignore_index=True)
-       # Bezpieczne deduplikowanie – dopasuj do istniejących kolumn
+    merged_df = pd.concat(frames, ignore_index=True)
+
+    # Dedup tylko po kolumnach, które faktycznie istnieją
     subset_cols = []
-    if "symbol" in merged_df.columns:
-        subset_cols.append("symbol")
-    if "Symbol" in merged_df.columns:
-        subset_cols.append("Symbol")
-    if "report_date" in merged_df.columns:
-        subset_cols.append("report_date")
+    for col in ["symbol", "report_date"]:
+        if col in merged_df.columns:
+            subset_cols.append(col)
 
     if subset_cols:
         merged_df.drop_duplicates(subset=subset_cols, inplace=True)
 
-    merged_df.sort_values(by=["report_date", "symbol"], inplace=True)
+    # Sortuj też tylko po istniejących kolumnach
+    sort_cols = [col for col in ["report_date", "symbol"] if col in merged_df.columns]
+    if sort_cols:
+        merged_df.sort_values(by=sort_cols, inplace=True)
 
-    merged_df.to_csv(merged_file, index=False)
-    print(f"✅ Połączono {len(files)} raportów -> {merged_file}")
+    # Zapisz wynik
+    out_path = "data/all_reports.csv"
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    merged_df.to_csv(out_path, index=False)
+    print(f"✅ Połączono {len(files)} raportów -> {out_path}")
