@@ -92,11 +92,22 @@ def predict_market(df):
     completion = client.chat.completions.create(
         model="llama-3.1-8b-instant",
         messages=[
-            {"role": "system", "content": "Jesteś profesjonalnym analitykiem rynku kryptowalut."},
-            {"role": "user", "content": prompt}
+            {
+                "role": "system",
+                "content": (
+                    "Jesteś profesjonalnym analitykiem rynku kryptowalut. "
+                    "Analizujesz krótkoterminowe dane (24h, 3D, 7D) i zmienność (ATR). "
+                    "Formułujesz krótkie, konkretne wnioski po polsku."
+                ),
+            },
+            {
+                "role": "user",
+                "content": prompt,
+            },
         ],
-        max_tokens=500
+        max_tokens=500,
+        temperature=0.4,
     )
 
-    # Return generated text output
-    return completion.choices[0].message["content"]
+    message = completion.choices[0].message
+    return message.content
