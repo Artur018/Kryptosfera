@@ -84,6 +84,7 @@ def predict_market(df):
     - oceń zmienność,
     - podaj potencjalne sygnały rynkowe,
     - zwięźle podsumuj sytuację.
+    - poinformuj, o atrakcyjnych parach do handlu grid botem.
 
     Odpowiedź proszę sformułować w języku polskim, krótko i rzeczowo.
     """
