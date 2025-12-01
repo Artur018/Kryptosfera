@@ -138,7 +138,18 @@ def merge_all_reports():
         return
 
     merged_df = pd.concat(df_list, ignore_index=True)
-    merged_df.drop_duplicates(subset=["symbol", "report_date"], inplace=True)
+       # Bezpieczne deduplikowanie – dopasuj do istniejących kolumn
+    subset_cols = []
+    if "symbol" in merged_df.columns:
+        subset_cols.append("symbol")
+    if "Symbol" in merged_df.columns:
+        subset_cols.append("Symbol")
+    if "report_date" in merged_df.columns:
+        subset_cols.append("report_date")
+
+    if subset_cols:
+        merged_df.drop_duplicates(subset=subset_cols, inplace=True)
+
     merged_df.sort_values(by=["report_date", "symbol"], inplace=True)
 
     merged_df.to_csv(merged_file, index=False)
