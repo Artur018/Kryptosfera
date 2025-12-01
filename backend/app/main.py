@@ -6,11 +6,11 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.app.services.analytics import generate_report, save_report_csv, merge_all_reports
-from backend.app.services.ai_predict import predict_market
-from backend.app.services.discord_notify import send_discord_message
-from backend.app.services.charts import generate_chart
-from backend.app.services.scheduler import start_scheduler, shutdown_scheduler
+from app.services.analytics import generate_report, save_report_csv, merge_all_reports
+from app.services.ai_predict import predict_market
+from app.services.discord_notify import send_discord_message
+from app.services.charts import generate_chart
+from app.services.scheduler import start_scheduler, shutdown_scheduler
 
 app = FastAPI(title="ChainLogic API")
 
