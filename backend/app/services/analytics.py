@@ -48,6 +48,7 @@ def get_historical_data(symbol, interval=Client.KLINE_INTERVAL_1HOUR, days=30):
 # Obliczanie ATR (Average True Range)
 # ============================================================
 def atr(df, period=14):
+    df = df.copy()
     df.loc[:, 'H-L'] = df['high'] - df['low']
     df.loc[:, 'H-PC'] = abs(df['high'] - df['close'].shift(1))
     df.loc[:, 'L-PC'] = abs(df['low'] - df['close'].shift(1))
