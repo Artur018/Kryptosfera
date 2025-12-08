@@ -11,6 +11,8 @@ Wszystkie katalogi tworzę zawczasu, by wyeliminować błędy IO i pozwolić
 na uruchomienia w świeżym środowisku CI/CD bez dodatkowych kroków.
 """
 import os
+from pathlib import Path
+from typing import List, Dict
 import pandas as pd
 import numpy as np
 import glob
@@ -178,3 +180,96 @@ def merge_all_reports():
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     merged_df.to_csv(out_path, index=False)
     print(f"✅ Połączono {len(files)} raportów -> {out_path}")
+    
+REPORTS_DIR = Path("data/reports")
+
+
+def get_latest_report_df() -> pd.DataFrame:
+    """
+    Zwraca DataFrame z najnowszego pliku raportu w data/reports/.
+    Zakładamy nazewnictwo report_YYYY-MM-DD-HH-MM-SS.csv
+    """
+    if not REPORTS_DIR.exists():
+        raise FileNotFoundError("Katalog data/reports nie istnieje")
+
+    report_files = sorted(REPORTS_DIR.glob("report_*.csv"))
+    if not report_files:
+        raise FileNotFoundError("Brak plików raportów w data/reports")
+
+    latest = report_files[-1]
+    df = pd.read_csv(latest)
+
+    # opcjonalnie dorzucamy kolumnę z timestampem pliku
+    df["generated_at"] = latest.stem.replace("report_", "")
+    return df
+
+
+def df_to_latest_report_payload(df: pd.DataFrame) -> Dict:
+    """
+    Konwertuje DataFrame z raportem na JSON gotowy pod API.
+    Oczekiwane kolumny:
+    Symbol, Close, 24h%, 3D%, 7D%, ATR(3D)%, ATR(7D)%
+    """
+    generated_at = str(df["generated_at"].iloc[0]) if "generated_at" in df.columns else None
+
+    payload = {
+        "generated_at": generated_at,
+        "symbols": []
+    }
+
+    for _, row in df.iterrows():
+        payload["symbols"].append(
+            {
+                "symbol": row.get("Symbol"),
+                "close": row.get("Close"),
+                "change_24h": row.get("24h%"),
+                "change_3d": row.get("3D%"),
+                "change_7d": row.get("7D%"),
+                "atr_3d": row.get("ATR(3D)%"),
+                "atr_7d": row.get("ATR(7D)%"),
+            }
+        )
+
+    return payload
+
+
+def detect_signals_from_df(
+    df: pd.DataFrame,
+    change_24h_threshold: float = 8.0,
+    atr_7d_threshold: float = 7.0,
+) -> List[Dict]:
+    """
+    Bardzo prosta logika sygnałów:
+    - big_move_24h: |24h%| >= change_24h_threshold
+    - high_atr_7d: ATR(7D)% >= atr_7d_threshold
+    """
+    signals: List[Dict] = []
+
+    for _, row in df.iterrows():
+        reasons = []
+
+        change_24h = row.get("24h%")
+        atr_7d = row.get("ATR(7D)%")
+
+        if change_24h is not None and abs(change_24h) >= change_24h_threshold:
+            reasons.append("big_move_24h")
+
+        if atr_7d is not None and atr_7d >= atr_7d_threshold:
+            reasons.append("high_atr_7d")
+
+        if not reasons:
+            continue
+
+        signals.append(
+            {
+                "symbol": row.get("Symbol"),
+                "reasons": reasons,
+                "change_24h": change_24h,
+                "change_3d": row.get("3D%"),
+                "change_7d": row.get("7D%"),
+                "atr_3d": row.get("ATR(3D)%"),
+                "atr_7d": atr_7d,
+            }
+        )
+
+    return signals

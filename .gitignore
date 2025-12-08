@@ -160,3 +160,15 @@ media/
 logs/
 data/
 
+# raporty / dane robocze
+data/
+
+# certyfikaty i klucze TLS
+certbot/conf/
+
+# pliki ACME z webroota nie są potrzebne w repo
+certbot/www/
+
+# python cache
+__pycache__/
+*.pyc
