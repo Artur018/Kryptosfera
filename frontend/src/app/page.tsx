@@ -1,5 +1,10 @@
 // src/app/page.tsx
-import { getLatestReport, getSignals } from "@/lib/api";
+import {
+  getLatestReport,
+  getSignals,
+  type ReportRow,
+  type Signal,
+} from "@/lib/api";
 
 export default async function HomePage() {
   const [report, signals] = await Promise.all([
@@ -39,7 +44,7 @@ export default async function HomePage() {
                 </tr>
               </thead>
               <tbody>
-                {report.symbols.map((row) => (
+                {report.symbols.map((row: ReportRow) => (
                   <tr
                     key={row.symbol}
                     className="border-t border-slate-800/70 hover:bg-slate-900/60 transition-colors"
@@ -94,7 +99,7 @@ export default async function HomePage() {
             </p>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
-              {signals.signals.map((s) => (
+              {signals.signals.map((s: Signal) => (
                 <div
                   key={s.symbol}
                   className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 space-y-2"
@@ -102,7 +107,7 @@ export default async function HomePage() {
                   <div className="flex items-center justify-between">
                     <h3 className="text-lg font-semibold">{s.symbol}</h3>
                     <div className="flex gap-1">
-                      {s.reasons.map((r) => (
+                      {s.reasons.map((r: string) => (
                         <span
                           key={r}
                           className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-300"
