@@ -1,22 +1,16 @@
 FROM python:3.11-slim
 
-ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=Europe/Warsaw
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    libssl-dev \
-    libffi-dev \
- && rm -rf /var/lib/apt/lists/*
-
+# 1. Zależności
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# 2. Kod aplikacji – tylko katalog app z backendu
 COPY app ./app
-COPY nginx ./nginx
-COPY cleanup.sh ./cleanup.sh
 
+# 3. Start serwera – pakiet "app" = katalog /app/app
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-

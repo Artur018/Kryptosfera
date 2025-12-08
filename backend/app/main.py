@@ -119,3 +119,4 @@ def _on_startup():
 @app.on_event("shutdown")
 def _on_shutdown():
     shutdown_scheduler()
+

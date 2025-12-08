@@ -1,26 +1,14 @@
-"""Warstwa analityczna zbierająca i transformująca dane z Binance.
-
-W tym module łączę kilka kroków w jednym miejscu:
-1. pobieranie świeżych świec, bo zależy mi na pełnej kontroli nad
-   parametrami (okres, interwał),
-2. wyliczanie wskaźników zmienności (ATR) – przydaje się do oceny ryzyka,
-3. konsekwentne zapisywanie raportów CSV oraz scalanie historycznych
-   wyników, by reszta systemu mogła bazować na gotowych plikach.
-
-Wszystkie katalogi tworzę zawczasu, by wyeliminować błędy IO i pozwolić
-na uruchomienia w świeżym środowisku CI/CD bez dodatkowych kroków.
-"""
 import os
 from pathlib import Path
 from typing import List, Dict
 import pandas as pd
 import numpy as np
 import glob
-from datetime import datetime, timedelta
+from datetime import datetime
 from binance.client import Client
 from dotenv import load_dotenv
 
-
+# Katalogi na dane
 os.makedirs("data/reports", exist_ok=True)
 os.makedirs("data/charts", exist_ok=True)
 
@@ -30,7 +18,6 @@ client = Client(
     api_key=os.getenv("BINANCE_API_KEY"),
     api_secret=os.getenv("BINANCE_API_SECRET")
 )
-
 
 # ============================================================
 # Pobieranie danych z Binance
@@ -80,12 +67,12 @@ def generate_report(symbols):
 
             rows.append({
                 "Symbol": sym,
-                "Close": f"{close:.2f}",
-                "24h%": f"{pct_24h:.2f}%",
-                "3D%": f"{pct_3d:.2f}%",
-                "7D%": f"{pct_7d:.2f}%",
-                "ATR(3D)%": f"{atr_3d_pct:.2f}%",
-                "ATR(7D)%": f"{atr_7d_pct:.2f}%"
+                "Close": float(f"{close:.2f}"),
+                "24h%": float(f"{pct_24h:.2f}"),
+                "3D%": float(f"{pct_3d:.2f}"),
+                "7D%": float(f"{pct_7d:.2f}"),
+                "ATR(3D)%": float(f"{atr_3d_pct:.2f}"),
+                "ATR(7D)%": float(f"{atr_7d_pct:.2f}")
             })
         except Exception as e:
             print(f"❌ Błąd dla {sym}: {e}")
@@ -96,15 +83,15 @@ def generate_report(symbols):
     print(df)
     return df
 
-
 # ============================================================
 # Zapis raportu
 # ============================================================
-def save_report_csv(df):
+def save_report_csv(df: pd.DataFrame):
     folder_path = os.path.join("data", "reports")
     os.makedirs(folder_path, exist_ok=True)
 
     today = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+    df = df.copy()
     df["report_date"] = today
 
     filename = f"report_{today}.csv"
@@ -119,11 +106,6 @@ def save_report_csv(df):
 def merge_all_reports():
     """
     Merge all CSV reports from data/reports into a single all_reports.csv file.
-
-    - Normalizes column names (Symbol -> symbol).
-    - Ensures a 'report_date' column exists (based on filename if missing).
-    - Drops duplicates based on available keys.
-    - Sorts in a reasonable order for analysis.
     """
     reports_dir = "data/reports"
     pattern = os.path.join(reports_dir, "report_*.csv")
@@ -145,7 +127,6 @@ def merge_all_reports():
 
             # Ustal report_date – jeśli nie ma, użyj stempla z nazwy pliku
             if "report_date" not in df.columns:
-                # np. report_2025-12-01-20-08-00.csv -> 2025-12-01-20-08-00
                 base = os.path.basename(path)
                 ts = base.replace("report_", "").replace(".csv", "")
                 df["report_date"] = ts
@@ -161,28 +142,24 @@ def merge_all_reports():
 
     merged_df = pd.concat(frames, ignore_index=True)
 
-    # Dedup tylko po kolumnach, które faktycznie istnieją
-    subset_cols = []
-    for col in ["symbol", "report_date"]:
-        if col in merged_df.columns:
-            subset_cols.append(col)
-
+    subset_cols = [col for col in ["symbol", "report_date"] if col in merged_df.columns]
     if subset_cols:
         merged_df.drop_duplicates(subset=subset_cols, inplace=True)
 
-    # Sortuj też tylko po istniejących kolumnach
     sort_cols = [col for col in ["report_date", "symbol"] if col in merged_df.columns]
     if sort_cols:
         merged_df.sort_values(by=sort_cols, inplace=True)
 
-    # Zapisz wynik
     out_path = "data/all_reports.csv"
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     merged_df.to_csv(out_path, index=False)
     print(f"✅ Połączono {len(files)} raportów -> {out_path}")
-    
-REPORTS_DIR = Path("data/reports")
 
+# ============================================================
+# Helpers pod API: latest_report + signals
+# ============================================================
+
+REPORTS_DIR = Path("data/reports")
 
 def get_latest_report_df() -> pd.DataFrame:
     """
@@ -199,10 +176,8 @@ def get_latest_report_df() -> pd.DataFrame:
     latest = report_files[-1]
     df = pd.read_csv(latest)
 
-    # opcjonalnie dorzucamy kolumnę z timestampem pliku
     df["generated_at"] = latest.stem.replace("report_", "")
     return df
-
 
 def df_to_latest_report_payload(df: pd.DataFrame) -> Dict:
     """
@@ -231,7 +206,6 @@ def df_to_latest_report_payload(df: pd.DataFrame) -> Dict:
         )
 
     return payload
-
 
 def detect_signals_from_df(
     df: pd.DataFrame,
@@ -273,3 +247,4 @@ def detect_signals_from_df(
         )
 
     return signals
+

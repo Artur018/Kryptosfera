@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   backend:
     container_name: kryptosfera-backend
@@ -10,10 +12,9 @@ services:
       DISCORD_WEBHOOK: ${DISCORD_WEBHOOK}
       GROQ_API_KEY: ${GROQ_API_KEY}
     volumes:
-      - ./data:/app/data
+      - ./data:/code/data
     expose:
       - "8000"
-
 
   nginx:
     image: nginx:1.27-alpine
@@ -45,3 +46,4 @@ services:
       - ./certbot/conf:/etc/letsencrypt
     entrypoint: sh
     command: -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $!; done"
+
