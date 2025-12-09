@@ -29,14 +29,10 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "https://api.chainsignal.solutions";
 
 async function fetchJson<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    next: { revalidate: 60 },
-  });
-
+  const res = await fetch(`${API_BASE_URL}${path}`);
   if (!res.ok) {
     throw new Error(`API error ${res.status}: ${res.statusText}`);
   }
-
   return (await res.json()) as T;
 }
 
