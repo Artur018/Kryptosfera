@@ -29,7 +29,9 @@ SYMBOLS = ["BTC", "ETH", "SOL", "BNB", "TAO", "DASH", "HEMI", "PYTH"]
 # CORS – frontend na Vercel + lokalnie
 origins = [
     "http://localhost:3000",
-    "https://dashboard.chainlogic.pl",
+    "http://localhost:3001",
+    "https://chainsignal.solutions",
+    "https://kryptosfera-gvhfyl74k-arturs-projects-521a9df4.vercel.app",  # twój vercelowy URL, jeśli inny – podmień
 ]
 
 app.add_middleware(
