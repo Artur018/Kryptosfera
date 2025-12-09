@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -153,7 +153,11 @@ const changeArrow: Record<ChangeClass, string> = {
   flat: "→",
 };
 
-export default function HomePage() {
+/**
+ * Wewnętrzny komponent faktycznie korzystający z useSearchParams.
+ * Będzie owinięty w <Suspense>, żeby Next 16 się nie pluł.
+ */
+function HomePageInner() {
   const searchParams = useSearchParams();
   const langParam = searchParams.get("lang");
   const lang: Lang = langParam === "en" ? "en" : "pl";
@@ -177,7 +181,7 @@ export default function HomePage() {
         if (cancelled) return;
         setReport(r);
         setSignals(s);
-      } catch (err) {
+      } catch {
         if (cancelled) return;
         setError("api-error");
       } finally {
@@ -410,5 +414,25 @@ export default function HomePage() {
         )}
       </div>
     </main>
+  );
+}
+
+/**
+ * Zewnętrzny komponent strony – opakowuje inner w Suspense,
+ * żeby Next 16 przestał marudzić przy buildzie.
+ */
+export default function HomePage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-slate-950 text-slate-50">
+          <div className="mx-auto max-w-5xl px-4 py-8 text-sm text-slate-300">
+            Ładowanie...
+          </div>
+        </main>
+      }
+    >
+      <HomePageInner />
+    </Suspense>
   );
 }
