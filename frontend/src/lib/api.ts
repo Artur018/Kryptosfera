@@ -1,5 +1,7 @@
 // src/lib/api.ts
 
+// src/lib/api.ts
+
 export type ReportSymbolRow = {
   symbol: string;
   close: number;
@@ -25,23 +27,21 @@ export type Signal = {
   atr_7d: number;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
-
-if (!API_BASE_URL) {
-  throw new Error(
-    
-  );
-}
-
+// Publiczne API, więc ten URL NIE jest sekretem.
+// Env jest opcjonalne, fallback na backend produkcyjny.
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL || "https://api.chainsignal.solutions";
 
 async function fetchJson<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    // SSR + lekkie cache, możesz zmienić na "no-store" jak chcesz zawsze świeże
+  const url = `${API_BASE_URL}${path}`;
+
+  const res = await fetch(url, {
+    // SSR + lekkie cache, można zmienić na "no-store" jeśli ma być zawsze świeżo
     next: { revalidate: 60 },
   });
 
   if (!res.ok) {
-    throw new Error(`API error ${res.status}: ${res.statusText}`);
+    throw new Error(`API error ${res.status} for ${url}`);
   }
 
   return (await res.json()) as T;
