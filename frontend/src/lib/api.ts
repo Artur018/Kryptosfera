@@ -26,7 +26,7 @@ export type Signal = {
 };
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "https://chainsignal.solutions";
+  process.env.NEXT_PUBLIC_API_BASE_URL || "https://api.chainsignal.solutions";
 
 async function fetchJson<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE_URL}${path}`, {

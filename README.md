@@ -167,3 +167,7 @@ Let’s Encrypt (webroot),
 auto-renew przez certbot-renew,
 
 ścieżkę uruchomienia na czystym VPS (punkty typu: sklonuj repo, ustaw env, docker-compose up -d, certy, firewall).
+
+link do dashboardu na Vercel,
+
+link do https://chainsignal.solutions/openapi.json,
