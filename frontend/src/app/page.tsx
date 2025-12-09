@@ -1,6 +1,8 @@
-// src/app/page.tsx
+"use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   getLatestReport,
   getSignals,
@@ -8,9 +10,12 @@ import {
   type Signal,
 } from "@/lib/api";
 
-export const dynamic = "force-dynamic"; // ważne: wymuszamy render po stronie serwera dla każdego requestu
-
 type Lang = "pl" | "en";
+
+type LatestReportResponse = {
+  generated_at: string;
+  symbols: ReportSymbolRow[];
+};
 
 const translations: Record<
   Lang,
@@ -35,6 +40,8 @@ const translations: Record<
     signalsTitle: string;
     signalsSubtitle: string;
     signalsNone: string;
+    loading: string;
+    error: string;
   }
 > = {
   pl: {
@@ -58,6 +65,8 @@ const translations: Record<
     signalsTitle: "Sygnały",
     signalsSubtitle: "⚡ Sygnały (> 8% / 24h domyślnie)",
     signalsNone: "Brak aktywnych sygnałów dla ustawionych progów.",
+    loading: "Ładowanie danych z backendu...",
+    error: "Nie udało się pobrać danych z API.",
   },
 
   en: {
@@ -81,22 +90,19 @@ const translations: Record<
     signalsTitle: "Signals",
     signalsSubtitle: "⚡ Signals (> 8% / 24h by default)",
     signalsNone: "No active signals for current thresholds.",
+    loading: "Loading data from backend...",
+    error: "Failed to fetch data from API.",
   },
 };
 
 function formatGeneratedAt(raw: string, lang: Lang): string {
-  // backend zwraca np. "2025-12-09-16-00-06"
   const parts = raw.split("-");
   if (parts.length !== 6) return raw;
 
   const [year, month, day, hour, minute, second] = parts.map((v) =>
     Number(v),
   );
-  if (
-    [year, month, day, hour, minute, second].some(
-      (n) => Number.isNaN(n),
-    )
-  ) {
+  if ([year, month, day, hour, minute, second].some((n) => Number.isNaN(n))) {
     return raw;
   }
 
@@ -147,20 +153,46 @@ const changeArrow: Record<ChangeClass, string> = {
   flat: "→",
 };
 
-interface PageProps {
-  searchParams?: { lang?: string };
-}
-
-export default async function HomePage({ searchParams }: PageProps) {
-  const lang: Lang = searchParams?.lang === "en" ? "en" : "pl";
+export default function HomePage() {
+  const searchParams = useSearchParams();
+  const langParam = searchParams.get("lang");
+  const lang: Lang = langParam === "en" ? "en" : "pl";
   const t = translations[lang];
 
-  const [report, signals] = await Promise.all([
-    getLatestReport(),
-    getSignals(),
-  ]);
+  const [report, setReport] = useState<LatestReportResponse | null>(null);
+  const [signals, setSignals] = useState<Signal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const generatedAt = formatGeneratedAt(report.generated_at, lang);
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const [r, s] = await Promise.all([getLatestReport(), getSignals()]);
+
+        if (cancelled) return;
+        setReport(r);
+        setSignals(s);
+      } catch (err) {
+        if (cancelled) return;
+        setError("api-error");
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50">
@@ -202,166 +234,180 @@ export default async function HomePage({ searchParams }: PageProps) {
           </div>
         </header>
 
-        {/* GRID: SNAPSHOT + SIGNALS */}
-        <section className="grid gap-6 md:grid-cols-[2fr_1fr]">
-          {/* SNAPSHOT */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 shadow-lg shadow-slate-950/40">
-            <div className="mb-4 flex items-center justify-between gap-2">
-              <div>
-                <h2 className="text-sm font-medium text-slate-200">
-                  {t.lastSnapshot}
-                </h2>
-                <p className="mt-1 text-[11px] text-slate-400">
-                  {t.generatedAt}:{" "}
-                  <span className="font-mono text-slate-200">
-                    {generatedAt}
-                  </span>
-                </p>
+        {/* STANY ŁADOWANIA / BŁĘDU */}
+        {loading && (
+          <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 text-sm text-slate-300">
+            {t.loading}
+          </section>
+        )}
+
+        {!loading && error && (
+          <section className="rounded-2xl border border-red-900 bg-red-950/40 p-4 text-sm text-red-200">
+            {t.error}
+          </section>
+        )}
+
+        {!loading && !error && report && (
+          <section className="grid gap-6 md:grid-cols-[2fr_1fr]">
+            {/* SNAPSHOT */}
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 shadow-lg shadow-slate-950/40">
+              <div className="mb-4 flex items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-sm font-medium text-slate-200">
+                    {t.lastSnapshot}
+                  </h2>
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    {t.generatedAt}:{" "}
+                    <span className="font-mono text-slate-200">
+                      {formatGeneratedAt(report.generated_at, lang)}
+                    </span>
+                  </p>
+                </div>
               </div>
-            </div>
 
-            <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40">
-              <table className="min-w-full text-left text-xs">
-                <thead className="bg-slate-900/70 text-[11px] uppercase tracking-wide text-slate-400">
-                  <tr>
-                    <th className="px-3 py-2 font-medium">
-                      {t.table.symbol}
-                    </th>
-                    <th className="px-3 py-2 font-medium">
-                      {t.table.price}
-                    </th>
-                    <th className="px-3 py-2 font-medium">
-                      {t.table.change24h}
-                    </th>
-                    <th className="px-3 py-2 font-medium">
-                      {t.table.change3d}
-                    </th>
-                    <th className="px-3 py-2 font-medium">
-                      {t.table.change7d}
-                    </th>
-                    <th className="px-3 py-2 font-medium">
-                      {t.table.atr3d}
-                    </th>
-                    <th className="px-3 py-2 font-medium">
-                      {t.table.atr7d}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/80">
-                  {report.symbols.map((row: ReportSymbolRow) => {
-                    const classification = classifyChange24h(
-                      row.change_24h,
-                    );
-                    const arrow = changeArrow[classification];
-                    const cls = changeClassStyles[classification];
+              <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40">
+                <table className="min-w-full text-left text-xs">
+                  <thead className="bg-slate-900/70 text-[11px] uppercase tracking-wide text-slate-400">
+                    <tr>
+                      <th className="px-3 py-2 font-medium">
+                        {t.table.symbol}
+                      </th>
+                      <th className="px-3 py-2 font-medium">
+                        {t.table.price}
+                      </th>
+                      <th className="px-3 py-2 font-medium">
+                        {t.table.change24h}
+                      </th>
+                      <th className="px-3 py-2 font-medium">
+                        {t.table.change3d}
+                      </th>
+                      <th className="px-3 py-2 font-medium">
+                        {t.table.change7d}
+                      </th>
+                      <th className="px-3 py-2 font-medium">
+                        {t.table.atr3d}
+                      </th>
+                      <th className="px-3 py-2 font-medium">
+                        {t.table.atr7d}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/80">
+                    {report.symbols.map((row: ReportSymbolRow) => {
+                      const classification = classifyChange24h(
+                        row.change_24h,
+                      );
+                      const arrow = changeArrow[classification];
+                      const cls = changeClassStyles[classification];
 
-                    return (
-                      <tr
-                        key={row.symbol}
-                        className="hover:bg-slate-900/70"
-                      >
-                        <td className="px-3 py-2 text-[11px] font-semibold tracking-wide text-slate-100">
-                          {row.symbol}
-                        </td>
-                        <td className="px-3 py-2 text-[11px] font-mono text-slate-200">
-                          {formatPrice(row.close, lang)}
-                        </td>
-                        <td className="px-3 py-2 text-[11px] font-mono">
-                          <span className={cls}>
-                            {arrow} {formatChange(row.change_24h)}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 text-[11px] font-mono text-slate-200">
-                          {formatChange(row.change_3d)}
-                        </td>
-                        <td className="px-3 py-2 text-[11px] font-mono text-slate-200">
-                          {formatChange(row.change_7d)}
-                        </td>
-                        <td className="px-3 py-2 text-[11px] font-mono text-slate-300">
-                          {row.atr_3d.toFixed(2)}%
-                        </td>
-                        <td className="px-3 py-2 text-[11px] font-mono text-slate-300">
-                          {row.atr_7d.toFixed(2)}%
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* SIGNALS */}
-          <div className="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/40 p-4 shadow-lg shadow-slate-950/40">
-            <div className="mb-1 flex items-center justify-between gap-2">
-              <div>
-                <h2 className="text-sm font-medium text-slate-200">
-                  {t.signalsTitle}
-                </h2>
-                <p className="mt-1 text-[11px] text-slate-400">
-                  {t.signalsSubtitle}
-                </p>
-              </div>
-              <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-mono text-slate-200">
-                {signals.length}
-              </span>
-            </div>
-
-            <div className="mt-2 flex-1 space-y-2">
-              {signals.length === 0 ? (
-                <p className="text-[11px] text-slate-400">
-                  {t.signalsNone}
-                </p>
-              ) : (
-                signals.map((s: Signal) => (
-                  <div
-                    key={s.symbol + s.reasons.join(",")}
-                    className="rounded-xl border border-slate-800 bg-slate-950/60 p-3"
-                  >
-                    <div className="mb-1 flex items-center justify-between">
-                      <span className="text-xs font-semibold tracking-wide text-slate-50">
-                        {s.symbol}
-                      </span>
-                      <span className="text-[11px] font-mono text-emerald-400">
-                        {formatChange(s.change_24h)}
-                      </span>
-                    </div>
-                    <div className="mb-1 flex gap-2 text-[10px] text-slate-300">
-                      <span>
-                        3d:{" "}
-                        <span className="font-mono">
-                          {formatChange(s.change_3d)}
-                        </span>
-                      </span>
-                      <span>
-                        7d:{" "}
-                        <span className="font-mono">
-                          {formatChange(s.change_7d)}
-                        </span>
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-1 text-[9px] text-slate-300">
-                      <span className="rounded-full bg-slate-900 px-2 py-0.5 font-mono">
-                        ATR3d {s.atr_3d.toFixed(2)}%
-                      </span>
-                      <span className="rounded-full bg-slate-900 px-2 py-0.5 font-mono">
-                        ATR7d {s.atr_7d.toFixed(2)}%
-                      </span>
-                      {s.reasons.map((reason) => (
-                        <span
-                          key={reason}
-                          className="rounded-full bg-emerald-900/40 px-2 py-0.5 font-mono text-emerald-300"
+                      return (
+                        <tr
+                          key={row.symbol}
+                          className="hover:bg-slate-900/70"
                         >
-                          {reason}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ))
-              )}
+                          <td className="px-3 py-2 text-[11px] font-semibold tracking-wide text-slate-100">
+                            {row.symbol}
+                          </td>
+                          <td className="px-3 py-2 text-[11px] font-mono text-slate-200">
+                            {formatPrice(row.close, lang)}
+                          </td>
+                          <td className="px-3 py-2 text-[11px] font-mono">
+                            <span className={cls}>
+                              {arrow} {formatChange(row.change_24h)}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-[11px] font-mono text-slate-200">
+                            {formatChange(row.change_3d)}
+                          </td>
+                          <td className="px-3 py-2 text-[11px] font-mono text-slate-200">
+                            {formatChange(row.change_7d)}
+                          </td>
+                          <td className="px-3 py-2 text-[11px] font-mono text-slate-300">
+                            {row.atr_3d.toFixed(2)}%
+                          </td>
+                          <td className="px-3 py-2 text-[11px] font-mono text-slate-300">
+                            {row.atr_7d.toFixed(2)}%
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        </section>
+
+            {/* SYGNAŁY */}
+            <div className="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/40 p-4 shadow-lg shadow-slate-950/40">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-sm font-medium text-slate-200">
+                    {t.signalsTitle}
+                  </h2>
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    {t.signalsSubtitle}
+                  </p>
+                </div>
+                <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-mono text-slate-200">
+                  {signals.length}
+                </span>
+              </div>
+
+              <div className="mt-2 flex-1 space-y-2">
+                {signals.length === 0 ? (
+                  <p className="text-[11px] text-slate-400">
+                    {t.signalsNone}
+                  </p>
+                ) : (
+                  signals.map((s: Signal) => (
+                    <div
+                      key={s.symbol + s.reasons.join(",")}
+                      className="rounded-xl border border-slate-800 bg-slate-950/60 p-3"
+                    >
+                      <div className="mb-1 flex items-center justify-between">
+                        <span className="text-xs font-semibold tracking-wide text-slate-50">
+                          {s.symbol}
+                        </span>
+                        <span className="text-[11px] font-mono text-emerald-400">
+                          {formatChange(s.change_24h)}
+                        </span>
+                      </div>
+                      <div className="mb-1 flex gap-2 text-[10px] text-slate-300">
+                        <span>
+                          3d:{" "}
+                          <span className="font-mono">
+                            {formatChange(s.change_3d)}
+                          </span>
+                        </span>
+                        <span>
+                          7d:{" "}
+                          <span className="font-mono">
+                            {formatChange(s.change_7d)}
+                          </span>
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-1 text-[9px] text-slate-300">
+                        <span className="rounded-full bg-slate-900 px-2 py-0.5 font-mono">
+                          ATR3d {s.atr_3d.toFixed(2)}%
+                        </span>
+                        <span className="rounded-full bg-slate-900 px-2 py-0.5 font-mono">
+                          ATR7d {s.atr_7d.toFixed(2)}%
+                        </span>
+                        {s.reasons.map((reason) => (
+                          <span
+                            key={reason}
+                            className="rounded-full bg-emerald-900/40 px-2 py-0.5 font-mono text-emerald-300"
+                          >
+                            {reason}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </section>
+        )}
       </div>
     </main>
   );
