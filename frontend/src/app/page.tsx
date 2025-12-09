@@ -1,7 +1,5 @@
 // src/app/page.tsx
 
-// src/app/page.tsx
-
 import Link from "next/link";
 import {
   getLatestReport,
@@ -9,6 +7,9 @@ import {
   type ReportSymbolRow,
   type Signal,
 } from "@/lib/api";
+
+// Wymuszamy stronę dynamiczną, żeby reagowała na ?lang=pl|en
+export const dynamic = "force-dynamic";
 
 const translations = {
   en: {
@@ -28,6 +29,7 @@ const translations = {
       atr3d: "ATR 3D %",
       atr7d: "ATR 7D %",
     },
+    symbolsBadge: (n: number) => `${n} symbols`,
     signalsSectionTitle: "Signals",
     signalsSectionSubtitle: "24h moves above threshold & volatility filters.",
     noSignals: "No active signals for the current thresholds.",
@@ -42,7 +44,7 @@ const translations = {
     langPL: "PL",
   },
   pl: {
-    appTitle: "Chainsignal – Dzienny radar rynku krypto",
+    appTitle: "Chainsignal – dzienny radar rynku krypto",
     subtitle:
       "Monitorujemy wybrane pary spot z Binance i wyłapujemy mocne ruchy 24h / 7D wraz z ATR.",
     lastUpdate: "Ostatnia aktualizacja",
@@ -58,6 +60,7 @@ const translations = {
       atr3d: "ATR 3D %",
       atr7d: "ATR 7D %",
     },
+    symbolsBadge: (n: number) => `${n} symboli`,
     signalsSectionTitle: "Sygnały",
     signalsSectionSubtitle:
       "Ruchy 24h powyżej progu oraz dodatkowe filtry zmienności.",
@@ -107,7 +110,8 @@ function formatPercent(value: number): string {
 }
 
 function formatPrice(value: number): string {
-  if (value >= 1000) return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  if (value >= 1000)
+    return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
   if (value >= 1) return value.toFixed(2);
   return value.toPrecision(3);
 }
@@ -154,7 +158,7 @@ export default async function HomePage({ searchParams }: PageProps) {
             <span className="text-xs text-slate-500">{t.langLabel}</span>
             <div className="inline-flex overflow-hidden rounded-full border border-slate-700 bg-slate-900">
               <Link
-                href="?lang=en"
+                href="/?lang=en"
                 className={`px-3 py-1 text-xs font-medium ${
                   lang === "en"
                     ? "bg-slate-100 text-slate-900"
@@ -164,7 +168,7 @@ export default async function HomePage({ searchParams }: PageProps) {
                 {t.langEN}
               </Link>
               <Link
-                href="?lang=pl"
+                href="/?lang=pl"
                 className={`px-3 py-1 text-xs font-medium ${
                   lang === "pl"
                     ? "bg-slate-100 text-slate-900"
@@ -191,7 +195,7 @@ export default async function HomePage({ searchParams }: PageProps) {
                 </p>
               </div>
               <div className="rounded-full bg-slate-900 px-3 py-1 text-[10px] font-mono text-slate-300">
-                {symbols.length} symbols
+                {t.symbolsBadge(symbols.length)}
               </div>
             </div>
 
@@ -199,13 +203,27 @@ export default async function HomePage({ searchParams }: PageProps) {
               <table className="min-w-full text-xs">
                 <thead className="bg-slate-900/80">
                   <tr className="border-b border-slate-800 text-[11px] uppercase tracking-wide text-slate-400">
-                    <th className="px-3 py-2 text-left">{t.tableHeaders.symbol}</th>
-                    <th className="px-3 py-2 text-right">{t.tableHeaders.price}</th>
-                    <th className="px-3 py-2 text-right">{t.tableHeaders.change24h}</th>
-                    <th className="px-3 py-2 text-right">{t.tableHeaders.change3d}</th>
-                    <th className="px-3 py-2 text-right">{t.tableHeaders.change7d}</th>
-                    <th className="px-3 py-2 text-right">{t.tableHeaders.atr3d}</th>
-                    <th className="px-3 py-2 text-right">{t.tableHeaders.atr7d}</th>
+                    <th className="px-3 py-2 text-left">
+                      {t.tableHeaders.symbol}
+                    </th>
+                    <th className="px-3 py-2 text-right">
+                      {t.tableHeaders.price}
+                    </th>
+                    <th className="px-3 py-2 text-right">
+                      {t.tableHeaders.change24h}
+                    </th>
+                    <th className="px-3 py-2 text-right">
+                      {t.tableHeaders.change3d}
+                    </th>
+                    <th className="px-3 py-2 text-right">
+                      {t.tableHeaders.change7d}
+                    </th>
+                    <th className="px-3 py-2 text-right">
+                      {t.tableHeaders.atr3d}
+                    </th>
+                    <th className="px-3 py-2 text-right">
+                      {t.tableHeaders.atr7d}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -271,7 +289,9 @@ export default async function HomePage({ searchParams }: PageProps) {
                 </span>
               </div>
 
-              <p className="mb-3 text-[10px] text-slate-500">{t.thresholdsHint}</p>
+              <p className="mb-3 text-[10px] text-slate-500">
+                {t.thresholdsHint}
+              </p>
 
               {signals.length === 0 ? (
                 <p className="text-xs text-slate-400">{t.noSignals}</p>
