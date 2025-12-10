@@ -1,5 +1,5 @@
 "use client";
-
+import { Zap } from "lucide-react";
 import { useState } from "react";
 import type { LatestReport, Signal } from "@/lib/api";
 
@@ -30,7 +30,7 @@ const translations: Record<
     reasonsLabel: string;
     changeLabel: string;
     errorTitle: string;
-    errorBody: string;
+    errorBody: string; 
   }
 > = {
   en: {
