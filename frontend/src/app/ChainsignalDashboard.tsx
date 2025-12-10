@@ -1,190 +1,162 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import type { LatestReport, ReportSymbolRow, Signal } from "@/lib/api";
-import { getLatestReport, getSignals } from "@/lib/api";
+import { useState } from "react";
+import type { LatestReport, Signal } from "@/lib/api";
 
 type Lang = "en" | "pl";
+
+interface Props {
+  initialReport: LatestReport | null;
+  initialSignals: Signal[];
+  initialError: string | null;
+}
 
 const translations: Record<
   Lang,
   {
-    title: string;
+    appTitle: string;
     subtitle: string;
-    generatedAt: (date: string) => string;
-    reportSectionTitle: string;
-    signalsSectionTitle: string;
-    noSignals: string;
-    change24h: string;
-    change3d: string;
-    change7d: string;
-    atr3d: string;
-    atr7d: string;
-    symbol: string;
-    price: string;
+    lastUpdate: string;
+    tableTitle: string;
+    colSymbol: string;
+    colPrice: string;
+    col24h: string;
+    col3d: string;
+    col7d: string;
+    colAtr3d: string;
+    colAtr7d: string;
+    signalsTitle: string;
+    signalsEmpty: string;
     reasonsLabel: string;
-    loading: string;
-    error: string;
-    langLabel: string;
+    changeLabel: string;
+    errorTitle: string;
+    errorBody: string;
   }
 > = {
   en: {
-    title: "Chainsignal",
-    subtitle: "Daily crypto volatility & momentum monitor",
-    generatedAt: (date) => `Report generated at ${date}`,
-    reportSectionTitle: "Market overview",
-    signalsSectionTitle: "Signals (> 8% / 24h)",
-    noSignals: "No active signals for the selected criteria.",
-    change24h: "24h %",
-    change3d: "3D %",
-    change7d: "7D %",
-    atr3d: "ATR(3D) %",
-    atr7d: "ATR(7D) %",
-    symbol: "Symbol",
-    price: "Price",
+    appTitle: "Chainsignal dashboard",
+    subtitle: "Volatility & momentum overview for your core watchlist.",
+    lastUpdate: "Last update",
+    tableTitle: "Market overview",
+    colSymbol: "Symbol",
+    colPrice: "Price",
+    col24h: "24h change",
+    col3d: "3d change",
+    col7d: "7d change",
+    colAtr3d: "ATR 3d %",
+    colAtr7d: "ATR 7d %",
+    signalsTitle: "Signals (24h move > 8% by default)",
+    signalsEmpty: "No active signals that match current filters.",
     reasonsLabel: "Reasons",
-    loading: "Loading data…",
-    error: "Failed to fetch data from API.",
-    langLabel: "Language",
+    changeLabel: "Change / volatility",
+    errorTitle: "Failed to fetch data from API.",
+    errorBody:
+      "Backend is currently unavailable or the request failed. Try again in a moment.",
   },
   pl: {
-    title: "Chainsignal",
-    subtitle: "Dzienny monitoring zmienności i momentum rynku krypto",
-    generatedAt: (date) => `Raport wygenerowany: ${date}`,
-    reportSectionTitle: "Przegląd rynku",
-    signalsSectionTitle: "Sygnały (> 8% / 24h)",
-    noSignals: "Brak aktywnych sygnałów dla wybranych kryteriów.",
-    change24h: "24h %",
-    change3d: "3 dni %",
-    change7d: "7 dni %",
-    atr3d: "ATR(3D) %",
-    atr7d: "ATR(7D) %",
-    symbol: "Symbol",
-    price: "Cena",
+    appTitle: "Panel Chainsignal",
+    subtitle:
+      "Przegląd zmienności i momentum dla twojej kluczowej listy obserwowanych.",
+    lastUpdate: "Ostatnia aktualizacja",
+    tableTitle: "Przegląd rynku",
+    colSymbol: "Symbol",
+    colPrice: "Cena",
+    col24h: "Zmiana 24h",
+    col3d: "Zmiana 3 dni",
+    col7d: "Zmiana 7 dni",
+    colAtr3d: "ATR 3 dni %",
+    colAtr7d: "ATR 7 dni %",
+    signalsTitle: "Sygnały (domyślnie ruch 24h > 8%)",
+    signalsEmpty: "Brak aktywnych sygnałów przy aktualnych filtrach.",
     reasonsLabel: "Powody",
-    loading: "Ładowanie danych…",
-    error: "Błąd podczas pobierania danych z API.",
-    langLabel: "Język",
+    changeLabel: "Zmiana / zmienność",
+    errorTitle: "Błąd pobierania danych z API.",
+    errorBody:
+      "Backend jest chwilowo niedostępny albo zapytanie się wywaliło. Spróbuj ponownie za chwilę.",
   },
 };
 
-// mapujemy klucze reasons → ładne stringi, per język
-const reasonLabels: Record<Lang, Record<string, string>> = {
-  en: {
-    big_move_24h: "Big 24h move",
-    atr_spike: "ATR spike",
-  },
-  pl: {
-    big_move_24h: "Duży ruch w 24h",
-    atr_spike: "Wybicie ATR",
-  },
-};
+function formatGeneratedAt(raw: string | undefined, lang: Lang): string {
+  if (!raw) return "-";
 
-function formatGeneratedAtHuman(raw: string, lang: Lang): string {
-  // backend: "2025-12-09-16-00-06"
-  const parts = raw.split("-");
-  if (parts.length < 6) {
-    return raw;
-  }
-  const [year, month, day, hour, minute] = parts;
-  const base = `${day}.${month}.${year} ${hour}:${minute}`;
-  return lang === "pl" ? base : `${year}-${month}-${day} ${hour}:${minute}`;
+  // backend daje np. "2025-12-09-16-00-06"
+  const normalized = raw.replace(/-/g, ":");
+  const [y, m, d, hh, mm, ss] = normalized.split(":").map(Number);
+  const date = new Date(y, m - 1, d, hh, mm, ss || 0);
+
+  return new Intl.DateTimeFormat(lang === "en" ? "en-GB" : "pl-PL", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(date);
 }
 
-export default function ChainsignalDashboard() {
+function formatPercent(value: number): string {
+  const sign = value > 0 ? "+" : value < 0 ? "" : "";
+  return `${sign}${value.toFixed(2)}%`;
+}
+
+function formatPrice(value: number): string {
+  if (value >= 1000) return value.toFixed(2);
+  if (value >= 1) return value.toFixed(2);
+  if (value >= 0.01) return value.toFixed(4);
+  return value.toPrecision(4);
+}
+
+function mapReason(reason: string, lang: Lang): string {
+  if (reason === "big_move_24h") {
+    return lang === "en" ? "24h move above threshold" : "ruch 24h powyżej progu";
+  }
+  // Jak coś nowego wymyślimy w backendzie, to tutaj się doda
+  return reason;
+}
+
+export default function ChainsignalDashboard({
+  initialReport,
+  initialSignals,
+  initialError,
+}: Props) {
   const [lang, setLang] = useState<Lang>("en");
   const t = translations[lang];
 
-  const [report, setReport] = useState<LatestReport | null>(null);
-  const [signals, setSignals] = useState<Signal[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadData() {
-      try {
-        setLoading(true);
-        setErrorMsg(null);
-        const [latestReport, activeSignals] = await Promise.all([
-          getLatestReport(),
-          getSignals(),
-        ]);
-
-        if (cancelled) return;
-
-        setReport(latestReport);
-        // NIE filtrujemy już tu dodatkowo, backend i tak robi swoje
-        setSignals(activeSignals);
-      } catch (err) {
-        console.error("Error while fetching API data:", err);
-        if (!cancelled) {
-          setErrorMsg("api_error");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
-
-    loadData();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const handleLangChange = (newLang: Lang) => {
-    setLang(newLang);
-  };
-
-  const formattedGeneratedAt =
-    report?.generated_at != null
-      ? formatGeneratedAtHuman(report.generated_at, lang)
-      : null;
+  const generatedAt = formatGeneratedAt(initialReport?.generated_at, lang);
+  const rows = initialReport?.symbols ?? [];
+  const signals = initialSignals ?? [];
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-6 md:px-8 md:py-10">
-        {/* Header */}
-        <header className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
+        {/* Top bar: logo + lang switch */}
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-50 md:text-3xl">
-              {t.title}
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-50">
+              {t.appTitle}
             </h1>
-            <p className="mt-1 max-w-xl text-sm text-slate-300">
-              {t.subtitle}
+            <p className="mt-1 text-sm text-slate-400">{t.subtitle}</p>
+            <p className="mt-1 text-xs text-slate-500">
+              {t.lastUpdate}:{" "}
+              <span className="font-mono text-slate-200">{generatedAt}</span>
             </p>
-            {formattedGeneratedAt && (
-              <p className="mt-1 text-xs font-mono text-slate-400">
-                {t.generatedAt(formattedGeneratedAt)}
-              </p>
-            )}
           </div>
 
-          {/* Language switch */}
-          <div className="flex items-center gap-2 rounded-full bg-slate-900 px-3 py-1 text-xs text-slate-200">
-            <span className="mr-1 text-slate-400">{t.langLabel}:</span>
+          <div className="flex items-center gap-2 self-start rounded-full bg-slate-900/70 p-1 text-xs">
             <button
               type="button"
-              onClick={() => handleLangChange("en")}
-              className={`rounded-full px-2 py-0.5 ${
+              onClick={() => setLang("en")}
+              className={`rounded-full px-3 py-1 transition ${
                 lang === "en"
-                  ? "bg-emerald-500 text-slate-900"
-                  : "bg-transparent text-slate-300 hover:bg-slate-800"
+                  ? "bg-slate-100 text-slate-900"
+                  : "text-slate-300 hover:text-slate-50"
               }`}
             >
               EN
             </button>
             <button
               type="button"
-              onClick={() => handleLangChange("pl")}
-              className={`rounded-full px-2 py-0.5 ${
+              onClick={() => setLang("pl")}
+              className={`rounded-full px-3 py-1 transition ${
                 lang === "pl"
-                  ? "bg-emerald-500 text-slate-900"
-                  : "bg-transparent text-slate-300 hover:bg-slate-800"
+                  ? "bg-slate-100 text-slate-900"
+                  : "text-slate-300 hover:text-slate-50"
               }`}
             >
               PL
@@ -192,195 +164,176 @@ export default function ChainsignalDashboard() {
           </div>
         </header>
 
-        {/* Error / loading */}
-        {loading && (
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3 text-sm text-slate-200">
-            {t.loading}
-          </div>
-        )}
-        {!loading && errorMsg && (
-          <div className="rounded-xl border border-red-700/60 bg-red-900/40 px-4 py-3 text-sm text-red-100">
-            {t.error}
+        {/* Error box if API padło */}
+        {initialError && (
+          <div className="rounded-xl border border-red-500/40 bg-red-950/40 px-4 py-3 text-sm text-red-100">
+            <div className="font-semibold">{t.errorTitle}</div>
+            <div className="mt-1 text-red-200">{t.errorBody}</div>
           </div>
         )}
 
-        {!loading && !errorMsg && report && (
-          <section className="grid gap-6 md:grid-cols-3">
-            {/* Market overview table */}
-            <div className="md:col-span-2">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <h2 className="text-sm font-medium text-slate-200">
-                  {t.reportSectionTitle}
-                </h2>
-                <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-mono text-slate-400">
-                  {report.symbols.length} assets
-                </span>
-              </div>
-              <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/60">
-                <table className="min-w-full border-collapse text-xs">
-                  <thead className="bg-slate-900/80 text-slate-300">
-                    <tr>
-                      <th className="px-3 py-2 text-left font-medium">
-                        {t.symbol}
-                      </th>
-                      <th className="px-3 py-2 text-right font-medium">
-                        {t.price}
-                      </th>
-                      <th className="px-3 py-2 text-right font-medium">
-                        {t.change24h}
-                      </th>
-                      <th className="px-3 py-2 text-right font-medium">
-                        {t.change3d}
-                      </th>
-                      <th className="px-3 py-2 text-right font-medium">
-                        {t.change7d}
-                      </th>
-                      <th className="px-3 py-2 text-right font-medium">
-                        {t.atr3d}
-                      </th>
-                      <th className="px-3 py-2 text-right font-medium">
-                        {t.atr7d}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.symbols.map((row: ReportSymbolRow) => {
-                      const isPositive = row.change_24h >= 0;
-                      const changeClass = isPositive
-                        ? "text-emerald-400"
-                        : "text-rose-400";
-
-                      return (
-                        <tr
-                          key={row.symbol}
-                          className="border-t border-slate-800/70 hover:bg-slate-900"
-                        >
-                          <td className="px-3 py-2 font-mono text-[11px] text-slate-100">
-                            {row.symbol}
-                          </td>
-                          <td className="px-3 py-2 text-right text-[11px] text-slate-100">
-                            {row.close.toFixed(2)}
-                          </td>
-                          <td
-                            className={`px-3 py-2 text-right text-[11px] ${changeClass}`}
-                          >
-                            {row.change_24h.toFixed(2)}%
-                          </td>
-                          <td className="px-3 py-2 text-right text-[11px] text-slate-200">
-                            {row.change_3d.toFixed(2)}%
-                          </td>
-                          <td className="px-3 py-2 text-right text-[11px] text-slate-200">
-                            {row.change_7d.toFixed(2)}%
-                          </td>
-                          <td className="px-3 py-2 text-right text-[11px] text-slate-300">
-                            {row.atr_3d.toFixed(2)}%
-                          </td>
-                          <td className="px-3 py-2 text-right text-[11px] text-slate-300">
-                            {row.atr_7d.toFixed(2)}%
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+        {/* Main grid */}
+        <main className="grid gap-6 md:grid-cols-[2fr,1.2fr]">
+          {/* Market overview table */}
+          <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 shadow-lg shadow-slate-950/40 backdrop-blur">
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <h2 className="text-sm font-medium text-slate-200">
+                {t.tableTitle}
+              </h2>
+              <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-mono text-slate-300">
+                {rows.length} symbols
+              </span>
             </div>
 
-            {/* Signals */}
-            <div>
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <h2 className="text-sm font-medium text-slate-200">
-                  {t.signalsSectionTitle}
-                </h2>
-                <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-mono text-slate-400">
-                  {signals.length} active
-                </span>
-              </div>
-
-              <div className="flex flex-col gap-3">
-                {signals.length === 0 ? (
-                  <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-3 text-xs text-slate-300">
-                    {t.noSignals}
-                  </div>
-                ) : (
-                  signals.map((s) => {
-                    const isPositive = s.change_24h >= 0;
-                    const changeClass = isPositive
-                      ? "text-emerald-400"
-                      : "text-rose-400";
+            <div className="overflow-x-auto">
+              <table className="min-w-full border-separate border-spacing-y-1 text-left text-xs sm:text-sm">
+                <thead className="text-[10px] uppercase tracking-wide text-slate-400 sm:text-xs">
+                  <tr>
+                    <th className="px-2 py-1">{t.colSymbol}</th>
+                    <th className="px-2 py-1 text-right">{t.colPrice}</th>
+                    <th className="px-2 py-1 text-right">{t.col24h}</th>
+                    <th className="px-2 py-1 text-right">{t.col3d}</th>
+                    <th className="px-2 py-1 text-right">{t.col7d}</th>
+                    <th className="px-2 py-1 text-right">{t.colAtr3d}</th>
+                    <th className="px-2 py-1 text-right">{t.colAtr7d}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => {
+                    const isUp = row.change_24h > 0;
+                    const isDown = row.change_24h < 0;
 
                     return (
-                      <article
-                        key={s.symbol}
-                        className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-3 text-xs"
+                      <tr
+                        key={row.symbol}
+                        className="rounded-lg bg-slate-900/60 align-middle"
                       >
-                        <div className="mb-1 flex items-center justify-between">
-                          <span className="font-mono text-[11px] text-slate-50">
-                            {s.symbol}
-                          </span>
-                          <span
-                            className={`font-mono text-[11px] ${changeClass}`}
-                          >
-                            {s.change_24h.toFixed(2)}%
-                          </span>
-                        </div>
-
-                        <div className="mb-1 flex gap-2 text-[11px] text-slate-300">
-                          <span>{t.change3d}:</span>
-                          <span
-                            className={
-                              s.change_3d >= 0
-                                ? "text-emerald-400"
-                                : "text-rose-400"
-                            }
-                          >
-                            {s.change_3d.toFixed(2)}%
-                          </span>
-                        </div>
-                        <div className="mb-1 flex gap-2 text-[11px] text-slate-300">
-                          <span>{t.change7d}:</span>
-                          <span
-                            className={
-                              s.change_7d >= 0
-                                ? "text-emerald-400"
-                                : "text-rose-400"
-                            }
-                          >
-                            {s.change_7d.toFixed(2)}%
-                          </span>
-                        </div>
-
-                        <div className="mb-2 flex gap-2 text-[11px] text-slate-400">
-                          <span>{t.atr3d}:</span>
-                          <span>{s.atr_3d.toFixed(2)}%</span>
-                          <span>{t.atr7d}:</span>
-                          <span>{s.atr_7d.toFixed(2)}%</span>
-                        </div>
-
-                        {s.reasons.length > 0 && (
-                          <div className="flex flex-wrap items-center gap-1">
-                            <span className="text-[10px] uppercase tracking-wide text-slate-500">
-                              {t.reasonsLabel}:
-                            </span>
-                            {s.reasons.map((reason) => (
-                              <span
-                                key={reason}
-                                className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-200"
-                              >
-                                {reasonLabels[lang][reason] ?? reason}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </article>
+                        <td className="px-2 py-2 text-[11px] font-semibold uppercase text-slate-100 sm:text-xs">
+                          {row.symbol}
+                        </td>
+                        <td className="px-2 py-2 text-right font-mono text-[11px] text-slate-100 sm:text-xs">
+                          {formatPrice(row.close)}
+                        </td>
+                        <td
+                          className={`px-2 py-2 text-right font-mono text-[11px] sm:text-xs ${
+                            isUp
+                              ? "text-emerald-400"
+                              : isDown
+                              ? "text-red-400"
+                              : "text-slate-200"
+                          }`}
+                        >
+                          {formatPercent(row.change_24h)}
+                        </td>
+                        <td className="px-2 py-2 text-right font-mono text-[11px] text-slate-200 sm:text-xs">
+                          {formatPercent(row.change_3d)}
+                        </td>
+                        <td className="px-2 py-2 text-right font-mono text-[11px] text-slate-200 sm:text-xs">
+                          {formatPercent(row.change_7d)}
+                        </td>
+                        <td className="px-2 py-2 text-right font-mono text-[11px] text-slate-300 sm:text-xs">
+                          {formatPercent(row.atr_3d)}
+                        </td>
+                        <td className="px-2 py-2 text-right font-mono text-[11px] text-slate-300 sm:text-xs">
+                          {formatPercent(row.atr_7d)}
+                        </td>
+                      </tr>
                     );
-                  })
-                )}
-              </div>
+                  })}
+                </tbody>
+              </table>
             </div>
           </section>
-        )}
+
+          {/* Signals */}
+          <section className="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/40 p-4 shadow-lg shadow-slate-950/40 backdrop-blur">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <h2 className="text-sm font-medium text-slate-200">
+                {t.signalsTitle}
+              </h2>
+              <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-mono text-slate-300">
+                {signals.length} active
+              </span>
+            </div>
+
+            {signals.length === 0 ? (
+              <p className="text-xs text-slate-400">{t.signalsEmpty}</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {signals.map((s) => {
+                  const isUp = s.change_24h > 0;
+                  const isDown = s.change_24h < 0;
+
+                  return (
+                    <div
+                      key={s.symbol + s.change_24h}
+                      className="rounded-xl border border-slate-800 bg-slate-950/60 p-3"
+                    >
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-50">
+                            {s.symbol}
+                          </span>
+                          <span className="text-[10px] font-mono text-slate-400">
+                            {t.changeLabel}: {formatPercent(s.change_24h)}
+                          </span>
+                        </div>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-mono ${
+                            isUp
+                              ? "bg-emerald-500/15 text-emerald-300"
+                              : isDown
+                              ? "bg-red-500/15 text-red-300"
+                              : "bg-slate-700/40 text-slate-200"
+                          }`}
+                        >
+                          24h {formatPercent(s.change_24h)}
+                        </span>
+                      </div>
+
+                      <div className="mb-1 flex gap-2 text-[10px] text-slate-300">
+                        <span className="font-semibold text-slate-400">
+                          {t.reasonsLabel}:
+                        </span>
+                        <span>
+                          {s.reasons.map((r) => mapReason(r, lang)).join(", ")}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-1 text-[10px] text-slate-400">
+                        <span>
+                          3d:{" "}
+                          <span className="font-mono text-slate-200">
+                            {formatPercent(s.change_3d)}
+                          </span>
+                        </span>
+                        <span>
+                          7d:{" "}
+                          <span className="font-mono text-slate-200">
+                            {formatPercent(s.change_7d)}
+                          </span>
+                        </span>
+                        <span>
+                          ATR 3d:{" "}
+                          <span className="font-mono text-slate-200">
+                            {formatPercent(s.atr_3d)}
+                          </span>
+                        </span>
+                        <span>
+                          ATR 7d:{" "}
+                          <span className="font-mono text-slate-200">
+                            {formatPercent(s.atr_7d)}
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </main>
       </div>
-    </main>
+    </div>
   );
 }

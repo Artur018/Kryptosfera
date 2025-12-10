@@ -25,14 +25,23 @@ export type Signal = {
   atr_7d: number;
 };
 
+// Lokalnie możesz używać .env.local, np. http://localhost:8000
+// W produkcji, jeśli zmienna nie jest ustawiona, lecimy na publiczne API.
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "https://api.chainsignal.solutions";
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "https://api.chainsignal.solutions";
 
 async function fetchJson<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`);
+  const url = `${API_BASE_URL}${path}`;
+
+  const res = await fetch(url, {
+    // Cache na 60s po stronie serwera; możesz zmienić na "no-store"
+    next: { revalidate: 60 },
+  });
+
   if (!res.ok) {
-    throw new Error(`API error ${res.status}: ${res.statusText}`);
+    throw new Error(`API error ${res.status}: ${res.statusText} for ${url}`);
   }
+
   return (await res.json()) as T;
 }
 
