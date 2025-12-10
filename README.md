@@ -1,162 +1,287 @@
 # 🧠 A_N_A_L – Algorytmiczna Nowoczesna Analiza Łańcucha
 
 System analizy i raportowania kryptowalut z wykorzystaniem **FastAPI**, **Binance API**, **Discord Webhooków**, **AI (OpenAI GPT)** i **automatycznych harmonogramów**.
+# Chainsignal / Kryptosfera – Production-ready Crypto Analytics Template
+
+This repository is a reusable, production-ready template for building
+crypto analytics applications:
+
+- **Backend:** FastAPI + APScheduler (scheduled reports), Docker, Nginx, HTTPS (Let’s Encrypt)
+- **Frontend:** Next.js 16 (App Router) + TypeScript + Tailwind
+- **Deploy:** VPS (Hetzner) + Vercel
+- **Use case:** daily market reports, signals, basic AI analysis
+
+Originally built as part of the **Chainlogic / Chainsignal / Kryptosfera** ecosystem, this codebase is designed so it can be reused as a starting point for other projects: portfolio apps, internal dashboards, custom crypto tools, or any data-driven product with scheduled jobs and a web UI.
+
+For full architectural context, see:
+
+> `PROJECT_CONTEXT_CHAINLOGIC.md`
+> (high-level description of the ecosystem and current state)
 
 ---
 
-## 📊 Opis projektu
+## 1. Features
 
-**A_N_A_L** to nowoczesny system do analizy rynku kryptowalut:
-- pobiera dane z **Binance API**
-- generuje raporty z ostatnich 24h / 3 dni / 7 dni / 30 dni
-- oblicza zmienność (ATR)
-- automatycznie wysyła raporty i wykresy na **Discorda**
-- generuje prognozy rynkowe przy pomocy **AI (OpenAI GPT-4o-mini)**
-- posiada prosty interfejs webowy w **Streamlit (Crypto HUD)**
-- obsługuje automatyczne raporty o **06:00 i 16:00 (Europe/Warsaw)**
+### Backend (FastAPI + APScheduler)
+
+- REST API with endpoints such as:
+
+  - `GET /` – healthcheck:
+    ```json
+    { "status": "OK", "service": "chainlogic-api" }
+    ```
+  - `GET /reports/latest` – latest aggregated market report
+  - `GET /signals` – signal list (e.g. 24h moves > 8%)
+  - `POST /schedule/run-now` – manual trigger for scheduled tasks
+  - `POST /predict` – AI-powered short analysis (Groq LLM)
+  - `GET /chart` – prepared endpoint for chart/visualisation data
+
+- Report engine:
+
+  - periodic data collection (currently mocked / simplified)
+  - calculations:
+    - 24h / 3D / 7D percent change
+    - ATR(3D), ATR(7D)
+    - “big move” signals (> 8% in 24h)
+  - CSV exports:
+    - per-run CSV files
+    - merged `all_reports.csv` history
+
+- Scheduler:
+
+  - APScheduler started on app startup
+  - default schedule:
+    - **06:00** and **16:00** (timezone `Europe/Warsaw`)
+  - cron-style daily reports in the background
+
+- Production-ready stack:
+
+  - Dockerized backend
+  - Nginx reverse proxy
+  - HTTPS via Let’s Encrypt (Certbot)
+  - logs + healthcheck endpoint for monitoring
 
 ---
 
-## 🧩 Architektura
+### Frontend (Next.js + Tailwind)
 
-📁 projekt/
-├── main.py ← serwer FastAPI (backend API)
-├── app.py ← frontend Streamlit (dashboard webowy)
-├── services/
-│ ├── analytics.py ← generowanie raportów, obliczenia ATR
-│ ├── ai_predict.py ← analiza AI z OpenAI GPT
-│ ├── binance_client.py ← integracja z API Binance
-│ ├── charts.py ← generowanie wykresów z raportów
-│ ├── discord_notify.py ← powiadomienia na Discord
-│ └── scheduler.py ← automatyczny harmonogram raportów
-├── data/
-│ ├── reports/ ← raporty dzienne CSV
-│ ├── charts/ ← zapisane wykresy PNG
-│ └── all_reports.csv ← scalenie wszystkich raportów
-├── .env ← klucze i konfiguracja
-├── requirements.txt ← zależności Pythona
-└── README.md
-
+- Next.js 16 (App Router) + TypeScript
+- Main dashboard:
+  - table with the latest report:
+    - `symbol`, `close`, `change_24h`, `change_3d`, `change_7d`,
+      `atr_3d`, `atr_7d`
+  - signal list based on `/signals`
+- Styling:
+  - Tailwind CSS
+  - responsive layout
+- Simple language switch (EN / PL) implemented in the client component
+  with `useState` (no heavy i18n framework)
+- API client in `frontend/src/lib/api.ts`:
+  - `getLatestReport()` → `/reports/latest`
+  - `getSignals()` → `/signals`
+  - shared `fetchJson()` helper
 
 ---
 
-## ⚙️ Instalacja
+### Deploy & Domains (example setup)
 
-### 1️⃣ Klonowanie projektu
+The template is currently used with:
+
+- **API:** `https://api.chainsignal.solutions`
+- **Frontend:** `https://chainsignal.solutions`
+
+You can replace these domains with your own by:
+
+- pointing DNS to your VPS / Vercel
+- updating Nginx config for the API domain
+- setting `NEXT_PUBLIC_API_BASE_URL` on Vercel
+
+---
+
+## 2. Tech stack
+
+**Backend**
+
+- Python
+- FastAPI
+- APScheduler
+- pandas
+- Docker / docker-compose
+- Nginx
+- Certbot (Let’s Encrypt)
+- (optional) Groq API for AI predictions
+- (optional) Discord webhook for notifications
+
+**Frontend**
+
+- Next.js 16 (App Router)
+- TypeScript
+- React
+- Tailwind CSS
+
+**Infra**
+
+- VPS (Hetzner in the reference setup)
+- Vercel for frontend hosting
+- GitHub repository integration
+
+---
+
+## 3. Running the project locally
+
+### 3.1. Backend (FastAPI)
+
+#### Prerequisites
+
+- Python 3.11+
+- Docker + docker-compose (recommended)
+
+#### Option A: run with Docker
+
+From `backend/` directory:
+
 ```bash
-git clone https://github.com/twoje_repo/A_N_A_L.git
-cd A_N_A_L
+cd backend
+docker-compose up -d backend
+######################################################################
 
-2️⃣ Utworzenie środowiska
+The API will be available at:
 
-python -m venv venv
-source venv/bin/activate      # Linux / macOS
-venv\Scripts\activate         # Windows
+http://localhost:8000
+
+
+Key endpoints to test:
+
+curl http://localhost:8000/
+curl http://localhost:8000/reports/latest
+curl http://localhost:8000/signals
+
+Option B: run with uvicorn (dev)
+cd backend
 pip install -r requirements.txt
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+###########################################################################################
+
+3.2. Frontend (Next.js)
+
+From frontend/ directory:
+
+cd frontend
+npm install
 
 
-3️⃣ Konfiguracja .env
+Create a .env.local and set:
 
-Uzupełnij swoje dane w pliku .env:
-
-BINANCE_API_KEY=twoj_klucz
-BINANCE_API_SECRET=twoj_secret
-DISCORD_WEBHOOK=https://discord.com/api/webhooks/xxx
-OPENAI_API_KEY=sk-xxx
-
-🚀 Uruchomienie
-Backend FastAPI
-uvicorn main:app --reload --port 8000
-
-➡️ Dokumentacja API: http://127.0.0.1:8000/docs
-
-Frontend Streamlit (Crypto HUD)
-streamlit run app.py
-
-➡️ Dashboard: http://localhost:8501
-
-⏰ Harmonogram raportów
-
-Plik scheduler.py
- uruchamia automatyczne raporty o:
-
-06:00 (poranny raport)
-
-16:00 (popołudniowy raport)
-
-Każdy raport:
-
-pobiera dane z Binance
-
-generuje plik CSV
-
-aktualizuje all_reports.csv
-
-tworzy wykres Top 3 wzrostów
-
-wysyła raport i wykres na Discord
-
-Można też uruchomić ręcznie:
-curl -X POST http://127.0.0.1:8000/schedule/run-now
-
-🧠 Prognoza AI
-
-Endpoint /predict generuje analizę rynku:
-curl http://127.0.0.1:8000/predict
-Bot wysyła prognozę trendów kryptowalut (po polsku) na Discorda.
-
-📈 Przykładowy workflow
-
-1️⃣ Uruchom serwer FastAPI
-2️⃣ Otwórz dashboard Streamlit
-3️⃣ Kliknij „Generuj raport” lub „Prognoza AI”
-4️⃣ Wyniki pojawią się na ekranie i na Discordzie
-5️⃣ Codzienne raporty wysyłane są automatycznie o 06:00 i 16:00
-
-🧱 Zależności
-Wymagane pakiety (z requirements.txt):
-fastapi
-uvicorn
-python-binance
-pandas
-requests
-streamlit
-openai
-python-dotenv
-ta
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 
 
-📦 Plan rozwoju (kolejne etapy)
+Then run the dev server:
 
- Docker + Docker Compose (FastAPI + DB)
-
- Baza danych PostgreSQL
-
- Frontend Next.js (PWA / mobile)
-
- Dashboard AI (LangChain / Chat z danymi)
-
- Publiczne demo (Render + Vercel)
-
- Dokumentacja i prezentacja portfolio
+npm run dev
 
 
-💬 Autor
+By default it runs on:
 
-Artur [A_N_A_L Project Lead]
-Projekt edukacyjno-analityczny 2025
-Integracja: Binance + Discord + OpenAI
-Tech stack: FastAPI · Python · Streamlit · APScheduler · OpenAI API
+http://localhost:3000
 
-🧾 Licencja
+4. Using this as a template for your own project
 
-Projekt udostępniony na licencji MIT.
-Możesz swobodnie korzystać, modyfikować i prezentować w portfolio.
+Fork or clone this repo
+
+git clone https://github.com/<your-account>/<your-repo>.git
+
+
+Rename the project
+
+Update the project name in README.md
+
+Adjust any product-specific wording (e.g. “Chainsignal”) to your own brand
+
+Adjust the reporting logic
+
+Edit backend/app/services/analytics.py
+
+Change:
+
+the list of tracked symbols
+
+data source (mock → real exchange API)
+
+thresholds for signals (e.g. 8% → custom)
+
+Change domains / deployment
+
+Replace api.chainsignal.solutions and chainsignal.solutions with your own domains
+
+Update:
+
+Nginx config in backend/nginx/nginx.conf
+
+Vercel project settings (NEXT_PUBLIC_API_BASE_URL)
+
+Extend features
+
+Example directions:
+
+connect a real exchange API (Binance, etc.)
+
+add authentication & user accounts
+
+build an “investment calculator” view
+
+add PostgreSQL + ORM for persisting more data
+
+expose more API endpoints for your frontend
+
+5. Known issues / TODO
+
+A few things are intentionally left as “good next steps”:
+
+i18n:
+
+language switch (EN/PL) works, but not all UI strings use the translation object yet
+
+mapping technical reasons (e.g. big_move_24h) to human-friendly labels
+
+Next.js dev quirks:
+
+if dev build breaks with .next artefacts, try:
+
+cd frontend
+rm -rf .next
+npm run dev
+
+
+Tests:
+
+the API is production-like, but automated tests (pytest, etc.) are not yet wired in
+
+For a detailed narrative of the project (architecture, roadmap, ecosystem),
+read:
+
+PROJECT_CONTEXT_CHAINLOGIC.md
+
+
+Skopiuj cały ten blok do `README.md` w repo.  
 
 ---
 
-Czy chcesz, żebym od razu zapisał ten plik jako `README.md` w Twoim katalogu projektu (gotowy do commitowania na GitHub)?
+## 3. Commit + push z jasnym przekazem
 
+Zakładam, że jesteś w katalogu repo:  
+
+```bash
+git status
+# powinieneś zobaczyć zmienione README.md i nowy PROJECT_CONTEXT_CHAINLOGIC.md
+
+git add README.md PROJECT_CONTEXT_CHAINLOGIC.md
+
+git commit -m "Turn Chainsignal/Kryptosfera into reusable crypto analytics template"
+
+git push origin main
+
+##########################################################################################################
 
 Docker + docker-compose,
 
