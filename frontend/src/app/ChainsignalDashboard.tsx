@@ -34,7 +34,7 @@ const translations: Record<
   }
 > = {
   en: {
-    appTitle: "Chainsignal dashboard",
+    appTitle: "Chainsignal",
     subtitle: "Volatility & momentum overview for your core watchlist.",
     lastUpdate: "Last update",
     tableTitle: "Market overview",
@@ -54,7 +54,7 @@ const translations: Record<
       "Backend is currently unavailable or the request failed. Try again in a moment.",
   },
   pl: {
-    appTitle: "Panel Chainsignal",
+    appTitle: "Chainsignal",
     subtitle:
       "Przegląd zmienności i momentum dla twojej kluczowej listy obserwowanych.",
     lastUpdate: "Ostatnia aktualizacja",
